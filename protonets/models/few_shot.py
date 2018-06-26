@@ -172,13 +172,15 @@ class Multiproto(nn.Module):
 
         return loss_val
 
-    def fit(self, samples, lr=1e-2, momentum=0.9, max_epochs=1000):
+    def fit(self, samples, lr=1e-1, momentum=0.9, max_epochs=1000):
         optimizer = torch.optim.SGD(self.parameters(), lr=lr, momentum=momentum)
+        scheduler =torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
         for e in range (0, max_epochs):
             optimizer.zero_grad()
             loss = self.loss(samples)
             loss.backward(retain_graph=True)
             optimizer.step()
+            scheduler.step(loss)
         return self
 
 
@@ -218,7 +220,7 @@ class Protonet(nn.Module):
                                        z_dim, n_proto, n_class)
             if zs.is_cuda:
                 support_model = support_model.cuda()
-            support_model.fit(zs, lr=1e-2, momentum=0.9, max_epochs=500)
+            support_model.fit(zs, lr=1e-2, momentum=0.9, max_epochs=200)
             z_proto = support_model.prototypes
         else:
             z_proto = zs.mean(1)
