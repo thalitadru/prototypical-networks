@@ -102,7 +102,7 @@ class Multiproto(nn.Module):
 
         dists = euclidean_dist(samples.view(n_class*n_samples, -1), self.prototypes)
 
-        qj = F.softmax(-dists/10, dim=1)
+        qj = F.softmax(-dists/self.temperature, dim=1)
         #qj = 1/(1e-5+dists)
 
         return self.output(qj)
