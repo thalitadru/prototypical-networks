@@ -71,7 +71,7 @@ class Multiproto(nn.Module):
             init_wc.zero_()
             y =  torch.arange(0, n_class).view(n_class, 1, 1).expand(n_class, n_proto_per_class, 1).reshape(n_class*n_proto_per_class,1).long()
             nn.init.xavier_normal_(init_wc)
-            #init_wc.scatter_(1,y,1)
+            init_wc.scatter_(1,y,1)
             init_wc = init_wc.transpose(0,1)
 
         self.hidden = nn.Linear(n_dim, n_dim)
@@ -172,15 +172,16 @@ class Multiproto(nn.Module):
 
         return loss_val
 
-    def fit(self, samples, lr=1e-1, momentum=0.9, max_epochs=1000):
-        optimizer = torch.optim.SGD(self.parameters(), lr=lr, momentum=momentum)
-        scheduler =torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+    def fit(self, samples, lr=1e-1, max_epochs=1000):
+        optimizer = torch.optim.Adam(
+                self.parameters(), lr=lr, weight_decay=1e-4)
+        #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
         for e in range (0, max_epochs):
             optimizer.zero_grad()
             loss = self.loss(samples)
             loss.backward(retain_graph=True)
             optimizer.step()
-            scheduler.step(loss)
+            #scheduler.step(loss)
         return self
 
 
@@ -217,10 +218,12 @@ class Protonet(nn.Module):
         if self.multiproto:
             n_proto=2*n_class
             support_model = Multiproto(zs,
-                                       z_dim, n_proto, n_class)
+                                       z_dim, n_proto, n_class
+                                       init='random')
             if zs.is_cuda:
                 support_model = support_model.cuda()
-            support_model.fit(zs, lr=1e-2, momentum=0.9, max_epochs=200)
+            support_model.fit(zs, lr=1e-1,
+                              max_epochs=200)
             z_proto = support_model.prototypes
         else:
             z_proto = zs.mean(1)
