@@ -226,7 +226,7 @@ class Protonet(nn.Module):
                 support_model = support_model.cuda()
             support_model.fit(zs, lr=1e-1,
                               max_epochs=200)
-
+            zq = zq.view(n_class, n_query, z_dim)
             log_p_y = support_model.predict_log_proba(zq)
         else:
             z_proto = zs.mean(1)
