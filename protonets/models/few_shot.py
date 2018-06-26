@@ -38,7 +38,7 @@ class Multiproto(nn.Module):
             #init with kmeans one iter to use kmeans++
             x_kmeans = samples.view(n_class*n_samples, -1).data.cpu().numpy()
             y_data = torch.arange(0, n_class).view(n_class, 1, 1).expand(n_class, n_samples, 1).reshape(n_class*n_samples,1).long()
-            print(x_kmeans.shape)
+
             centroid, label, inertia = k_means(
                     x_kmeans, int(n_proto),
                     max_iter=1, n_init=n_init, random_state=0)
@@ -55,7 +55,6 @@ class Multiproto(nn.Module):
             init_wc = torch.FloatTensor(n_proto, n_class)
             init_wc.zero_()
             nn.init.xavier_normal_(init_wc)
-            print(y.shape, init_wc.shape)
             init_wc.scatter_(1,y,1)
             init_wc = init_wc.transpose(0,1)
         else:
