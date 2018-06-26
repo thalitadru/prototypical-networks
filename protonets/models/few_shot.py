@@ -218,7 +218,7 @@ class Protonet(nn.Module):
         if self.multiproto:
             n_proto=2*n_class
             support_model = Multiproto(zs,
-                                       z_dim, n_proto, n_class
+                                       z_dim, n_proto, n_class,
                                        init='random')
             if zs.is_cuda:
                 support_model = support_model.cuda()
