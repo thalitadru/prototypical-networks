@@ -215,6 +215,8 @@ class Protonet(nn.Module):
         z_dim = z.size(-1)
 
         zs = z[:n_class*n_support].view(n_class, n_support, z_dim)
+        zq = z[n_class*n_support:]
+
         if self.multiproto:
             n_proto=2*n_class
             support_model = Multiproto(zs,
@@ -224,15 +226,14 @@ class Protonet(nn.Module):
                 support_model = support_model.cuda()
             support_model.fit(zs, lr=1e-1,
                               max_epochs=200)
-            z_proto = support_model.prototypes
+
+            log_p_y = support_model.predict_log_proba(zq)
         else:
             z_proto = zs.mean(1)
 
-        zq = z[n_class*n_support:]
+            dists = euclidean_dist(zq, z_proto)
 
-        dists = euclidean_dist(zq, z_proto)
-
-        log_p_y = F.log_softmax(-dists, dim=1).view(n_class, n_query, -1)
+            log_p_y = F.log_softmax(-dists, dim=1).view(n_class, n_query, -1)
 
         loss_val = -log_p_y.gather(2, target_inds).squeeze().view(-1).mean()
 
