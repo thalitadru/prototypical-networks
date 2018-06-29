@@ -20,7 +20,7 @@ class Flatten(nn.Module):
 
 class Multiproto(nn.Module):
     def __init__(self, samples, n_dim, n_proto, n_classes,
-                 use_hidden=True,
+                 use_hidden=False,
                  concat=True,
                  temperature=1,
                  init='kmeans++', n_init=10):
