@@ -20,13 +20,18 @@ class Flatten(nn.Module):
 
 class Multiproto(nn.Module):
     def __init__(self, samples, n_dim, n_proto, n_classes,
+                 use_hidden=True,
+                 concat=True,
                  temperature=1,
                  init='kmeans++', n_init=10):
         super().__init__()
         self.temperature = temperature
+        self.concat = concat
+
         n_class = samples.size(0)
         n_samples = samples.size(1)
         assert n_dim == samples.size(2)
+
         n_proto_per_class = n_proto // n_classes
         n_proto = n_proto_per_class*n_class
 
@@ -38,25 +43,28 @@ class Multiproto(nn.Module):
             #init with kmeans one iter to use kmeans++
             x_kmeans = samples.view(n_class*n_samples, -1).data.cpu().numpy()
             y_data = torch.arange(0, n_class).view(n_class, 1, 1).expand(n_class, n_samples, 1).reshape(n_class*n_samples,1).long()
-
             centroid, label, inertia = k_means(
-                    x_kmeans, int(n_proto),
-                    max_iter=1, n_init=n_init, random_state=0)
+                x_kmeans, int(n_proto),
+                precompute_distances=True if n_samples * n_dim > 1e4 else False,
+                max_iter=1, n_init=n_init, random_state=0)
             centroid = centroid.astype(np.float32)
             init_proto = torch.from_numpy(centroid)
             if samples.is_cuda:
                 init_proto = init_proto.cuda()
+
             #init wc
-            y = torch.zeros(n_proto, 1).long()
-            for c in range(n_proto):
-                idx = [i for i, l in enumerate(label) if l==c]
-                y_proto = y_data[idx]
-                y[c] = torch.unique(y_proto, sorted=True)[-1].long()
-            init_wc = torch.FloatTensor(n_proto, n_class)
-            init_wc.zero_()
-            nn.init.xavier_normal_(init_wc)
-            init_wc.scatter_(1,y,1)
-            init_wc = init_wc.transpose(0,1)
+            if not concat:
+                y = torch.zeros(n_proto, 1).long()
+                for c in range(n_proto):
+                    idx = [i for i, l in enumerate(label) if l==c]
+                    y_proto = y_data[idx]
+                    y[c] = torch.unique(y_proto, sorted=True)[-1].long()
+                init_wc = torch.FloatTensor(n_proto, n_class)
+                init_wc.zero_()
+                nn.init.xavier_normal_(init_wc)
+
+                init_wc.scatter_(1,y,1)
+                init_wc = init_wc.transpose(0,1)
         else:
             # sample from input samples to initialize protos and wc
             init_proto = []
@@ -67,20 +75,33 @@ class Multiproto(nn.Module):
             init_proto = torch.stack(init_proto, dim=0).view(n_class*n_proto_per_class, -1)
             init_proto +=  nn.init.xavier_normal_(torch.zeros_like(init_proto))
             # initialize wc
-            init_wc = torch.FloatTensor(n_proto, n_class)
-            init_wc.zero_()
-            y =  torch.arange(0, n_class).view(n_class, 1, 1).expand(n_class, n_proto_per_class, 1).reshape(n_class*n_proto_per_class,1).long()
-            nn.init.xavier_normal_(init_wc)
-            init_wc.scatter_(1,y,1)
-            init_wc = init_wc.transpose(0,1)
+            if not concat:
+                init_wc = torch.FloatTensor(n_proto, n_class)
+                init_wc.zero_()
+                y =  torch.arange(0, n_class).view(n_class, 1, 1).expand(n_class, n_proto_per_class, 1).reshape(n_class*n_proto_per_class,1).long()
+                nn.init.xavier_normal_(init_wc)
+                init_wc.scatter_(1,y,1)
+                init_wc = init_wc.transpose(0,1)
 
-        self.hidden = nn.Linear(n_dim, n_dim)
-        nn.init.xavier_normal_(self.hidden.weight)
+        # add hidden layer
+        if use_hidden:
+            self.hidden = nn.Linear(n_dim, n_dim)
+            init_hidden =  nn.init.xavier_normal_(torch.zeros_like(self.hidden.weight))
+            init_hidden += torch.eye(n_dim, n_dim)
+            self.hidden.weight = nn.Parameter(init_hidden)
+        else:
+            self.hidden = None
 
+        # then prototype coordinates
+        # shape n_protos x n_dim
         self.prototypes = nn.Parameter(init_proto)
 
-        self.output = nn.Linear(n_proto, n_classes, bias=False)
-        self.output.weight = nn.Parameter(init_wc)
+        if concat:
+            self.output = nn.Linear(n_dim*2, n_classes, bias=False)
+            nn.init.xavier_normal_(self.output.weight)
+        else:
+            self.output = nn.Linear(n_proto, n_classes, bias=False)
+            self.output.weight = nn.Parameter(init_wc)
 
     def transform(self, samples, flat=False):
         if flat:
@@ -98,14 +119,21 @@ class Multiproto(nn.Module):
         if samples.ndimension() != 3:
             samples = samples.view(n_class, n_samples, -1)
 
-        #samples = self.transform(samples)
+        if self.hidden is not None:
+            samples = self.transform(samples)
 
         dists = euclidean_dist(samples.view(n_class*n_samples, -1), self.prototypes)
 
         qj = F.softmax(-dists/self.temperature, dim=1)
-        #qj = 1/(1e-5+dists)
 
-        return self.output(qj)
+        if self.concat:
+            # x tilde = qj * pj
+            x_tilde = torch.mm(qj, self.prototypes)
+            x = samples.view(n_class*n_samples, -1)
+            cj = self.output(torch.cat((x, x_tilde), dim=-1))
+        else:
+            cj = self.output(qj)
+        return cj
 
     def proto_proba(self):
         return self.predict_proba(self.prototypes.view(self.n_classes,
