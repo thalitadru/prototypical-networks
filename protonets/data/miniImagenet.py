@@ -106,14 +106,14 @@ def load(opt, splits):
         else:
             n_episodes = opt['data.train_episodes']
 
-        CLASS_INDEX = defaultdict(list)
+        class_index = defaultdict(list)
         class_names = []
         with open(os.path.join(split_dir, "{:s}.csv".format(split)), 'r') as f:
             f.readline()
             for image_class in f.readlines():
                 image, class_name = image_class.split(',')
                 class_names.append(class_name.rstrip('\n'))
-                CLASS_INDEX[class_name].append(image)
+                class_index[class_name].append(image)
 
         transforms = [partial(convert_dict, 'class'),
                       partial(load_class_images, class_index),
