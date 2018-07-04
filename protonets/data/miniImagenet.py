@@ -20,7 +20,6 @@ from protonets.data.omniglot import scale_image
 
 
 MINIIMAGENET_DATA_DIR  = os.path.join(os.path.dirname(__file__), '../../data/miniImagenet')
-MINIIMAGENET_CLASS_INDEX = defaultdict(list)
 MINIIMAGENET_CACHE = { }
 
 
@@ -37,13 +36,13 @@ def convert_tensor(key, d):
     return d
 
 
-def load_class_images(d):
+def load_class_images(class_index, d):
     if d['class'] not in MINIIMAGENET_CACHE:
 
         image_dir = os.path.join('images')
 
         class_images = [os.path.join(image_dir, '%s.jpg' % img)
-                        for img in MINIIMAGENET_CLASS_INDEX[d['class']]]
+                        for img in class_index[d['class']]]
         if len(class_images) == 0:
             raise Exception("No images found for class %s." % d['class'])
 
@@ -107,21 +106,24 @@ def load(opt, splits):
         else:
             n_episodes = opt['data.train_episodes']
 
+        CLASS_INDEX = defaultdict(list)
+        class_names = []
+        with open(os.path.join(split_dir, "{:s}.csv".format(split)), 'r') as f:
+            f.readline()
+            for image_class in f.readlines():
+                image, class_name = image_class.split(',')
+                class_names.append(class_name.rstrip('\n'))
+                CLASS_INDEX[class_name].append(image)
+
         transforms = [partial(convert_dict, 'class'),
-                      load_class_images,
+                      partial(load_class_images, class_index),
                       partial(extract_episode, n_support, n_query)]
         if opt['data.cuda']:
             transforms.append(CudaTransform())
 
         transforms = compose(transforms)
 
-        class_names = []
-        with open(os.path.join(split_dir, "{:s}.csv".format(split)), 'r') as f:
-            f.readline()
-            for image_class in f.readlines():
-                image, class_name = image_class.split(',')
-                MINIIMAGENET_CLASS_INDEX[class_name].append(image)
-                class_names.append(class_name.rstrip('\n'))
+
         ds = TransformDataset(ListDataset(class_names), transforms)
 
         if opt['data.sequential']:
