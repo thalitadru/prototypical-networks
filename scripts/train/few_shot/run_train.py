@@ -41,6 +41,11 @@ parser.add_argument('--model.hid_dim', type=int, default=64, metavar='HIDDIM',
                     help="dimensionality of hidden layers (default: 64)")
 parser.add_argument('--model.z_dim', type=int, default=64, metavar='ZDIM',
                     help="dimensionality of input images (default: 64)")
+parser.add_argument('--model.concat', action='store_true',
+                    help="use combined model")
+parser.add_argument('--model.multiproto', action='store_true',
+                    help="use multiproto model")
+
 
 # train args
 parser.add_argument('--train.epochs', type=int, default=10000, metavar='NEPOCHS',

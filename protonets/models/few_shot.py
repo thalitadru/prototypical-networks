@@ -214,11 +214,12 @@ class Multiproto(nn.Module):
 
 
 class Protonet(nn.Module):
-    def __init__(self, encoder):
+    def __init__(self, encoder, multiproto=True, concat=True):
         super(Protonet, self).__init__()
 
         self.encoder = encoder
-        self.multiproto = True
+        self.multiproto = multiproto
+        self.concat = concat
 
 
     def loss(self, sample):
@@ -295,4 +296,4 @@ def load_protonet_conv(**kwargs):
         Flatten()
     )
 
-    return Protonet(encoder)
+    return Protonet(encoder, kwargs['multiproto'], kwargs['concat'])
