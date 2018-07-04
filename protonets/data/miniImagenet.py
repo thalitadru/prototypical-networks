@@ -15,8 +15,8 @@ from torchvision.transforms import ToTensor
 from torchnet.dataset import ListDataset, TransformDataset
 from torchnet.transform import compose
 
-from base import convert_dict, CudaTransform, EpisodicBatchSampler, SequentialBatchSampler
-from omniglot import scale_image
+from protonets.data.base import convert_dict, CudaTransform, EpisodicBatchSampler, SequentialBatchSampler
+from protonets.data.omniglot import scale_image
 
 
 MINIIMAGENET_DATA_DIR  = os.path.join(os.path.dirname(__file__), '../../data/miniImagenet')
