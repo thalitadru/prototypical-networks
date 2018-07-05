@@ -8,6 +8,7 @@ from zipfile import ZipFile
 
 import numpy as np
 from PIL import Image
+from tqdm import tqdm
 
 import torch
 from torchvision.transforms import ToTensor
@@ -23,28 +24,40 @@ MINIIMAGENET_DATA_DIR  = os.path.join(os.path.dirname(__file__), '../../data/min
 MINIIMAGENET_CACHE = { }
 
 
-def load_image_path(key, out_field, d):
+def extract_images(class_images_fnames,image_dir):
     with ZipFile(os.path.join(MINIIMAGENET_DATA_DIR, 'images.zip'), 'r') as arch:
-        fname = d[key]
-        with arch.open(fname) as img:
-            d[out_field] = Image.open(img)
+        for filename in tqdm(class_images_fnames,
+                             desc='extracting class images'):
+            zip_path = os.path.join('images', filename)
+            arch.extract(zip_path, path=image_dir)
+
+
+def load_image_path(key, out_field, d):
+    filepath = os.path.join(d[key])
+    d[out_field] = Image.open(filepath)
     return d
 
 
 def convert_tensor(key, d):
-    d[key] = 1.0 - torch.from_numpy(np.array(d[key], np.float32, copy=False)).transpose(0, 1).contiguous().view(1, d[key].size[0], d[key].size[1])
+    d[key] = 1.0 - torch.from_numpy(np.array(d[key], np.float32, copy=False)).transpose(0, 1).contiguous().view(3, d[key].size[0], d[key].size[1])
     return d
 
 
 def load_class_images(class_index, d):
     if d['class'] not in MINIIMAGENET_CACHE:
+        class_id = d['class']
+        image_dir = os.path.join(MINIIMAGENET_DATA_DIR,'data', class_id)
 
-        image_dir = os.path.join('images')
-
-        class_images = [os.path.join(image_dir, '%s.jpg' % img)
+        class_images = [os.path.join(image_dir, 'images', img)
                         for img in class_index[d['class']]]
+
         if len(class_images) == 0:
             raise Exception("No images found for class %s." % d['class'])
+
+        for image_path in class_images:
+            if not os.path.exists(image_path):
+                extract_images(class_index[d['class']], image_dir)
+                break
 
         image_ds = TransformDataset(ListDataset(class_images),
                                     compose([partial(convert_dict, 'file_name'),
@@ -113,7 +126,7 @@ def load(opt, splits):
                 image, class_name = image_class.split(',')
                 class_name = class_name.rstrip('\n')
                 class_index[class_name].append(image)
-        class_names = class_index.keys()
+        class_names = list(class_index.keys())
 
         transforms = [partial(convert_dict, 'class'),
                       partial(load_class_images, class_index),
